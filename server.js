@@ -62,8 +62,8 @@ app.post("/api/signup", async (req, res) => {
     res.json({ token: sign(user), user });
   } catch (e) {
     if (e.code === "23505") return res.status(400).json({ error: "username exists" });
-    console.error(e);
-    res.status(500).json({ error: "signup failed" });
+    console.error("Signup failed:", e);
+    res.status(500).json({ error: e.message || "signup failed" });
   }
 });
 
