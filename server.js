@@ -18,6 +18,29 @@ const pool = new Pool({
 });
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
+// Ensure tables exist on startup (so signup doesn't fail if tables are missing)
+async function ensureSchema() {
+  await pool.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+      username text UNIQUE NOT NULL,
+      password text NOT NULL,
+      avatar text DEFAULT ''
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+      room text NOT NULL,
+      user_id uuid REFERENCES users(id),
+      text text NOT NULL,
+      created_at timestamptz DEFAULT now()
+    );
+  `);
+  console.log("DB schema ready");
+}
+
 const sign = (u) => jwt.sign({ id: u.id, username: u.username }, JWT_SECRET, { expiresIn: "7d" });
 const auth = (req, res, next) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "");
@@ -93,4 +116,11 @@ app.get("/api/messages", auth, async (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log("API listening on", port));
+ensureSchema()
+  .then(() => {
+    app.listen(port, () => console.log("API listening on", port));
+  })
+  .catch((err) => {
+    console.error("Failed to init DB schema", err);
+    process.exit(1);
+  });
