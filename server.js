@@ -9,15 +9,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+// Root check
+app.get("/", (req, res) => res.send("API up"));
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 const sign = (u) => jwt.sign({ id: u.id, username: u.username }, JWT_SECRET, { expiresIn: "7d" });
 const auth = (req, res, next) => {
-  const t = (req.headers.authorization || "").replace("Bearer ", "");
-  try { req.user = jwt.verify(t, JWT_SECRET); next(); } catch { res.status(401).json({ error: "unauthorized" }); }
+  const token = (req.headers.authorization || "").replace("Bearer ", "");
+  try { req.user = jwt.verify(token, JWT_SECRET); next(); }
+  catch { return res.status(401).json({ error: "unauthorized" }); }
 };
 
+// Auth
 app.post("/api/signup", async (req, res) => {
   const { username, password, avatar = "" } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: "username and password required" });
@@ -31,6 +39,7 @@ app.post("/api/signup", async (req, res) => {
     res.json({ token: sign(user), user });
   } catch (e) {
     if (e.code === "23505") return res.status(400).json({ error: "username exists" });
+    console.error(e);
     res.status(500).json({ error: "signup failed" });
   }
 });
@@ -59,6 +68,7 @@ app.put("/api/me", auth, async (req, res) => {
   res.json(rows[0]);
 });
 
+// Messages
 app.post("/api/messages", auth, async (req, res) => {
   const { room = "global", text } = req.body || {};
   if (!text) return res.status(400).json({ error: "text required" });
